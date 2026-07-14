@@ -1,0 +1,11 @@
+{
+  "type": "Agent",
+  "name": "yield-pilot",
+  "description": "Autonomous yield rebalancer on Celo (Aave v3 stable markets). Moves capital only when the real APY delta justifies it — every decision logged with its economic reason, every tx carries the ERC-8021 attribution tag. Pre-trade safety checks via celo-sentinel (x402).",
+  "image": "",
+  "endpoints": [
+    { "type": "a2a", "url": "https://github.com/odiseo159-beep/yield-pilot" },
+    { "type": "wallet", "address": "0xc76Ee8DB7030A0b54643C43e05BA09925A349244", "chainId": 42220 }
+  ],
+  "supportedTrust": ["reputation"]
+}
