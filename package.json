@@ -1,0 +1,28 @@
+{
+  "name": "yield-pilot",
+  "version": "0.1.0",
+  "description": "Autonomous yield rebalancer on Celo. Moves capital between Aave v3 markets only when the real APY delta justifies it — every decision logged, every tx attributed.",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@bgd-labs/aave-address-book": "^4.44.22",
+    "@celo/attribution-tags": "^0.3.0",
+    "@x402/core": "^2.18.0",
+    "@x402/evm": "^2.18.0",
+    "@x402/fetch": "^2.18.0",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "viem": "^2.55.1"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^26.1.1",
+    "tsx": "^4.23.1",
+    "typescript": "^7.0.2"
+  }
+}
