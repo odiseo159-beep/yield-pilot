@@ -5,6 +5,7 @@ import { account } from "./chain.js";
 import { readMarkets } from "./apy.js";
 import { decide } from "./strategy.js";
 import { execute } from "./executor.js";
+import { dashboardHtml } from "./dashboard.js";
 
 const DATA_DIR = "data";
 const LOG_FILE = `${DATA_DIR}/decisions.jsonl`;
@@ -51,6 +52,15 @@ async function tick() {
 // --- Dashboard mínimo: estado + historial de decisiones (transparencia para jueces) ---
 const app = express();
 
+// Humanos (Accept: text/html) ven el dashboard; agentes reciben el estado JSON.
+app.get("/", (req, res, next) => {
+  if (req.accepts(["json", "html"]) === "html") {
+    res.type("html").send(dashboardHtml());
+    return;
+  }
+  next();
+});
+
 app.get("/", async (_req, res) => {
   const markets = await readMarkets().catch(() => []);
   res.json({
@@ -63,6 +73,7 @@ app.get("/", async (_req, res) => {
       minApyDeltaBps: config.minApyDeltaBps,
       cooldownHours: config.cooldownHours,
       maxMoveUsd: config.maxMoveUsd,
+      loopMinutes: config.loopMinutes,
     },
     markets: markets.map((m) => ({
       symbol: m.symbol,

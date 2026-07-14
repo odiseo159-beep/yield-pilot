@@ -11,11 +11,11 @@ export const config = {
   maxMoveUsd: Number(process.env.MAX_MOVE_USD ?? 500),
   slippageBps: BigInt(process.env.SLIPPAGE_BPS ?? 30),
 
-  sentinelUrl: process.env.SENTINEL_URL ?? "http://localhost:8080",
+  sentinelUrl: process.env.SENTINEL_URL ?? "http://localhost:1996",
   sentinelPaid: (process.env.SENTINEL_PAID ?? "false").toLowerCase() === "true",
 
   rpcUrl: process.env.RPC_URL ?? "https://forno.celo.org",
-  port: Number(process.env.PORT ?? 8090),
+  port: Number(process.env.PORT ?? 1997),
   loopMinutes: Number(process.env.LOOP_MINUTES ?? 15),
 } as const;
 
