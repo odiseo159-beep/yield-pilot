@@ -76,13 +76,49 @@ export async function execute(decision: Decision): Promise<ExecutionResult> {
   }
 
   if (decision.kind === "deploy_idle") {
-    const amount = parseUnits(decision.amountUsd.toFixed(to.decimals), to.decimals);
-    await ensureAllowance(to.underlying as Address, AAVE_POOL as Address, amount, hashes);
+    // El capital ocioso está en el token de `from`; el mejor mercado es `to`.
+    // Si difieren, hay que swapear primero — depositar `to` sin tenerlo revierte.
+    const idle = MARKETS[decision.from];
+    const amountIdle = parseUnits(decision.amountUsd.toFixed(idle.decimals), idle.decimals);
+    let target = to;
+
+    if (decision.from !== decision.to) {
+      let route: Awaited<ReturnType<typeof bestRoute>> | null = null;
+      try {
+        route = await bestRoute(idle.underlying as Address, to.underlying as Address, amountIdle);
+      } catch { /* sin ruta de swap hacia el mejor mercado */ }
+
+      if (route) {
+        const minOut = (route.amountOut * (10_000n - config.slippageBps)) / 10_000n;
+        await ensureAllowance(idle.underlying as Address, SWAP_ROUTER_02 as Address, amountIdle, hashes);
+        hashes.push(await writeTagged({
+          to: SWAP_ROUTER_02 as Address, abi: ROUTER_ABI as never, functionName: "exactInputSingle",
+          args: [{
+            tokenIn: idle.underlying, tokenOut: to.underlying, fee: route.fee,
+            recipient: account.address, amountIn: amountIdle, amountOutMinimum: minOut, sqrtPriceLimitX96: 0n,
+          }],
+          viaMulticall: true, // struct-param único: sin multicall revierte con "STF" al taguear
+        }));
+      } else {
+        // Fallback defendible: sin ruta al mejor mercado, el idle rinde en su propio mercado.
+        target = idle;
+      }
+    }
+
+    // depositar el balance real del token destino (post-swap incluye residuales)
+    const supplyAmount = await publicClient.readContract({
+      address: target.underlying as Address, abi: ERC20_ABI, functionName: "balanceOf", args: [account.address],
+    });
+    if (supplyAmount === 0n) {
+      return { executed: hashes.length > 0, txHashes: hashes, note: `deploy_idle: sin balance de ${target === to ? decision.to : decision.from} que depositar tras el swap` };
+    }
+    await ensureAllowance(target.underlying as Address, AAVE_POOL as Address, supplyAmount, hashes);
     hashes.push(await writeTagged({
       to: AAVE_POOL as Address, abi: POOL_ABI as never, functionName: "supply",
-      args: [to.underlying, amount, account.address, 0],
+      args: [target.underlying, supplyAmount, account.address, 0],
     }));
-    return { executed: true, txHashes: hashes, note: `deploy_idle → ${decision.to} $${decision.amountUsd.toFixed(2)}` };
+    const targetSymbol = target === to ? decision.to : decision.from;
+    return { executed: true, txHashes: hashes, note: `deploy_idle ${decision.from}→${targetSymbol} $${decision.amountUsd.toFixed(2)}${target !== to ? " (sin ruta al mejor mercado, depositado en el propio)" : ""}` };
   }
 
   // rebalance: withdraw → swap → supply

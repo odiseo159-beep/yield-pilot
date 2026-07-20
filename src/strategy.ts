@@ -14,6 +14,9 @@ export type Decision =
     }
   | {
       kind: "deploy_idle";
+      /** mercado cuyo token está ocioso en la wallet (lo que realmente tenemos) */
+      from: MarketSymbol;
+      /** mejor mercado destino (si difiere de from, hay que swapear primero) */
       to: MarketSymbol;
       amountUsd: number;
       reason: string;
@@ -36,6 +39,7 @@ export function decide(markets: MarketState[], lastMoveAt: number | null): Decis
     const idleMarket = markets.find((m) => m.idle > 1)!;
     return {
       kind: "deploy_idle",
+      from: idleMarket.symbol,
       to: best.symbol,
       amountUsd: Math.min(idleMarket.idle, config.maxMoveUsd),
       reason: `Capital ocioso ($${idleTotal.toFixed(2)} ${idleMarket.symbol}) sin generar yield; mejor mercado: ${best.symbol} @ ${(best.supplyAprBps / 100).toFixed(2)}%`,
