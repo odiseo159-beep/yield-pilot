@@ -79,7 +79,17 @@ export async function execute(decision: Decision): Promise<ExecutionResult> {
     // El capital ocioso está en el token de `from`; el mejor mercado es `to`.
     // Si difieren, hay que swapear primero — depositar `to` sin tenerlo revierte.
     const idle = MARKETS[decision.from];
-    const amountIdle = parseUnits(decision.amountUsd.toFixed(idle.decimals), idle.decimals);
+    // decision.amountUsd viene de un snapshot de decide() (roundtrip bigint->float->bigint,
+    // puede quedar unos pocos base units por encima del balance real) — releer el balance
+    // ON-CHAIN justo antes de firmar y nunca pedir más de lo que hay de verdad (si no, "STF").
+    const wantIdle = parseUnits(decision.amountUsd.toFixed(idle.decimals), idle.decimals);
+    const actualIdleBalance = await publicClient.readContract({
+      address: idle.underlying as Address, abi: ERC20_ABI, functionName: "balanceOf", args: [account.address],
+    });
+    const amountIdle = wantIdle < actualIdleBalance ? wantIdle : actualIdleBalance;
+    if (amountIdle === 0n) {
+      return { executed: false, txHashes: [], note: `deploy_idle: balance real de ${decision.from} es 0 (snapshot desactualizado)` };
+    }
     let target = to;
 
     if (decision.from !== decision.to) {
