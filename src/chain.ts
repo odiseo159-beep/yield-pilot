@@ -37,7 +37,25 @@ export type TaggedCall = {
   abi: Abi;
   functionName: string;
   args: readonly unknown[];
+  /**
+   * Envolver la llamada en multicall([...]) antes de appendear el tag. NECESARIO
+   * para funciones cuyo único parámetro es un struct/tupla (ej. exactInputSingle
+   * de Uniswap V3): Solidity exige longitud de calldata EXACTA al decodificar un
+   * tuple-param único, y revierte con datos extra al final ("STF" en el router de
+   * Uniswap — verificado empíricamente en mainnet). Un parámetro dinámico como
+   * bytes[] sí tolera bytes de sobra, así que envolver en multicall lo esquiva.
+   * Funciones con parámetros sueltos (approve, supply, withdraw) no lo necesitan.
+   */
+  viaMulticall?: boolean;
 };
+
+const MULTICALL_ABI = [
+  {
+    name: "multicall", type: "function", stateMutability: "payable",
+    inputs: [{ name: "data", type: "bytes[]" }],
+    outputs: [{ name: "", type: "bytes[]" }],
+  },
+] as const;
 
 /**
  * Ejecuta una llamada a contrato con el attribution tag APPENDEADO al calldata
@@ -46,11 +64,14 @@ export type TaggedCall = {
  */
 export async function writeTagged(call: TaggedCall): Promise<Hex> {
   if (!walletClient || !account) throw new Error("Sin SIGNER_PRIVATE_KEY: no se puede firmar.");
-  const encoded = encodeFunctionData({
+  let encoded = encodeFunctionData({
     abi: call.abi,
     functionName: call.functionName,
     args: call.args as unknown[],
   });
+  if (call.viaMulticall) {
+    encoded = encodeFunctionData({ abi: MULTICALL_ABI, functionName: "multicall", args: [[encoded]] });
+  }
   const suffix = attributionSuffix();
   const data = suffix ? concat([encoded, suffix]) : encoded;
 

@@ -39,6 +39,7 @@ const erc20 = parseAbi([
 ]);
 const routerAbi = parseAbi([
   "function exactInputSingle((address tokenIn, address tokenOut, uint24 fee, address recipient, uint256 amountIn, uint256 amountOutMinimum, uint160 sqrtPriceLimitX96)) payable returns (uint256)",
+  "function multicall(bytes[] calldata data) payable returns (bytes[] memory)",
 ]);
 const quoterAbi = parseAbi([
   "function quoteExactInputSingle((address tokenIn, address tokenOut, uint256 amountIn, uint24 fee, uint160 sqrtPriceLimitX96)) returns (uint256,uint160,uint32,uint256)",
@@ -47,8 +48,15 @@ const quoterAbi = parseAbi([
 const suffix = toDataSuffix(tag) as Hex;
 console.log(`signer ${account.address} · tag "${tag}"`);
 
-async function sendTagged(to: `0x${string}`, encoded: Hex): Promise<Hex> {
-  const data = concat([encoded, suffix]);
+// exactInputSingle toma un único param struct/tupla: Solidity exige longitud de
+// calldata EXACTA al decodificarlo y revierte ("STF") con el tag appendeado al
+// final. Envolver en multicall([...]) (parámetro DINÁMICO bytes[]) lo esquiva —
+// verificado empíricamente contra este router en mainnet.
+async function sendTagged(to: `0x${string}`, encoded: Hex, viaMulticall = false): Promise<Hex> {
+  const inner = viaMulticall
+    ? encodeFunctionData({ abi: routerAbi, functionName: "multicall", args: [[encoded]] })
+    : encoded;
+  const data = concat([inner, suffix]);
   await publicClient.call({ account: account.address, to, data }); // simulate primero
   const hash = await walletClient.sendTransaction({ to, data });
   const rcpt = await publicClient.waitForTransactionReceipt({ hash });
@@ -95,7 +103,7 @@ const minOut = (best.out * (10_000n - SLIPPAGE_BPS)) / 10_000n;
 const swapHash = await sendTagged(ROUTER, encodeFunctionData({
   abi: routerAbi, functionName: "exactInputSingle",
   args: [{ tokenIn: USDT, tokenOut: USDC, fee: best.fee, recipient: account.address, amountIn, amountOutMinimum: minOut, sqrtPriceLimitX96: 0n }],
-}));
+}), true);
 console.log(`  🎉 https://celoscan.io/tx/${swapHash}`);
 
 // --- verificación del tag on-chain ---

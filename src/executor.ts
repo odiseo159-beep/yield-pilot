@@ -103,6 +103,7 @@ export async function execute(decision: Decision): Promise<ExecutionResult> {
       tokenIn: from.underlying, tokenOut: to.underlying, fee: route.fee,
       recipient: account.address, amountIn, amountOutMinimum: minOut, sqrtPriceLimitX96: 0n,
     }],
+    viaMulticall: true, // exactInputSingle toma un único param struct: sin esto revierte con "STF" al appendear el tag
   }));
 
   // depositar lo recibido (balance real post-swap, no el estimado)
