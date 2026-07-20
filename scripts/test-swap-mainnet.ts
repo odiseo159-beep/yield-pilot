@@ -1,13 +1,13 @@
 /**
  * Primer swap TAGUEADO en Celo mainnet — la prueba del Track 1.
- * Swapea un monto chico (default $1) USDC->USDT vía SwapRouter02 con el
+ * Swapea un monto chico (default $1) USDT->USDC vía SwapRouter02 con el
  * attribution tag appendeado, y verifica el decode on-chain con verifyTx.
  *
  * Después de correrlo: verificar que la tx aparece en el Dune bajo tu tag
  * (https://dune.com/celo/agentic-payments-defai-hackathon) — ese read-back
  * es la única prueba real de que el volumen del pilot va a contar.
  *
- * Prerrequisitos: signer con USDC + CELO para gas, y ATTRIBUTION_TAG asignado.
+ * Prerrequisitos: signer con USDT + CELO para gas, y ATTRIBUTION_TAG asignado.
  * Uso: SIGNER_PRIVATE_KEY=0x... ATTRIBUTION_TAG=celo_xxxx npx tsx scripts/test-swap-mainnet.ts [monto_usd]
  */
 import "dotenv/config";
@@ -57,13 +57,13 @@ async function sendTagged(to: `0x${string}`, encoded: Hex): Promise<Hex> {
 }
 
 // --- pre-flight ---
-const [usdcBal, celoBal] = await Promise.all([
-  publicClient.readContract({ address: USDC, abi: erc20, functionName: "balanceOf", args: [account.address] }),
+const [usdtBal, celoBal] = await Promise.all([
+  publicClient.readContract({ address: USDT, abi: erc20, functionName: "balanceOf", args: [account.address] }),
   publicClient.getBalance({ address: account.address }),
 ]);
-console.log(`USDC: ${formatUnits(usdcBal, 6)} · CELO (gas): ${formatUnits(celoBal, 18)}`);
+console.log(`USDT: ${formatUnits(usdtBal, 6)} · CELO (gas): ${formatUnits(celoBal, 18)}`);
 const amountIn = parseUnits(amountUsd.toFixed(6), 6);
-if (usdcBal < amountIn) { console.error(`⛔ USDC insuficiente para swapear $${amountUsd}`); process.exit(1); }
+if (usdtBal < amountIn) { console.error(`⛔ USDT insuficiente para swapear $${amountUsd}`); process.exit(1); }
 if (celoBal === 0n) { console.error("⛔ Sin CELO para gas"); process.exit(1); }
 
 // --- mejor ruta ---
@@ -72,29 +72,29 @@ for (const fee of FEES) {
   try {
     const { result } = await publicClient.simulateContract({
       address: QUOTER, abi: quoterAbi, functionName: "quoteExactInputSingle",
-      args: [{ tokenIn: USDC, tokenOut: USDT, amountIn, fee, sqrtPriceLimitX96: 0n }],
+      args: [{ tokenIn: USDT, tokenOut: USDC, amountIn, fee, sqrtPriceLimitX96: 0n }],
     });
     const out = (result as readonly bigint[])[0];
     if (out > 0n && (!best || out > best.out)) best = { fee, out };
   } catch { /* sin pool */ }
 }
-if (!best) { console.error("⛔ sin ruta USDC->USDT"); process.exit(1); }
-console.log(`ruta: fee tier ${best.fee} → ~${formatUnits(best.out, 6)} USDT`);
+if (!best) { console.error("⛔ sin ruta USDT->USDC"); process.exit(1); }
+console.log(`ruta: fee tier ${best.fee} → ~${formatUnits(best.out, 6)} USDC`);
 
 // --- approve (tagueado) si hace falta ---
-const allowance = await publicClient.readContract({ address: USDC, abi: erc20, functionName: "allowance", args: [account.address, ROUTER] });
+const allowance = await publicClient.readContract({ address: USDT, abi: erc20, functionName: "allowance", args: [account.address, ROUTER] });
 if (allowance < amountIn) {
   console.log("approve tagueado…");
-  const h = await sendTagged(USDC, encodeFunctionData({ abi: erc20, functionName: "approve", args: [ROUTER, amountIn] }));
+  const h = await sendTagged(USDT, encodeFunctionData({ abi: erc20, functionName: "approve", args: [ROUTER, amountIn] }));
   console.log(`  https://celoscan.io/tx/${h}`);
 }
 
 // --- swap (tagueado) ---
-console.log(`swap $${amountUsd} USDC→USDT tagueado…`);
+console.log(`swap $${amountUsd} USDT→USDC tagueado…`);
 const minOut = (best.out * (10_000n - SLIPPAGE_BPS)) / 10_000n;
 const swapHash = await sendTagged(ROUTER, encodeFunctionData({
   abi: routerAbi, functionName: "exactInputSingle",
-  args: [{ tokenIn: USDC, tokenOut: USDT, fee: best.fee, recipient: account.address, amountIn, amountOutMinimum: minOut, sqrtPriceLimitX96: 0n }],
+  args: [{ tokenIn: USDT, tokenOut: USDC, fee: best.fee, recipient: account.address, amountIn, amountOutMinimum: minOut, sqrtPriceLimitX96: 0n }],
 }));
 console.log(`  🎉 https://celoscan.io/tx/${swapHash}`);
 
