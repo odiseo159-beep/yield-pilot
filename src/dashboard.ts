@@ -334,11 +334,23 @@ export function dashboardHtml(): string {
       el.innerHTML = '<div class="board-empty">no departures yet — next evaluation in ' + (st.strategy.loopMinutes ?? 15) + ' min</div>';
       return;
     }
-    el.innerHTML = log.slice(-40).reverse().map((d, i) => \`
+    // Consecutive identical HOLDs (repetitive, expected, boring) collapse into one
+    // row so the real moves -- rebalance / deploy_idle -- keep the spotlight.
+    const recent = log.slice(-200).reverse();
+    const groups = [];
+    for (const d of recent) {
+      const prev = groups[groups.length - 1];
+      if (d.decision === "hold" && prev && prev.decision === "hold" && prev.reason === d.reason) {
+        prev.count++; prev.oldestAt = d.at;
+      } else {
+        groups.push({ decision: d.decision, reason: d.reason, txHashes: d.txHashes, at: d.at, oldestAt: d.at, count: 1 });
+      }
+    }
+    el.innerHTML = groups.slice(0, 40).map((g, i) => \`
       <div class="brow \${i === 0 ? "now" : ""}">
-        <time title="\${d.at}">\${rel(d.at)}</time>
-        <span class="st st-\${d.decision}">\${d.decision.replace("_", " ")}</span>
-        <span class="rem">\${d.reason || ""}\${d.txHashes?.length ? ' · <a href="https://celoscan.io/tx/' + d.txHashes[0] + '" target="_blank" rel="noopener">TX↗</a>' : ""}</span>
+        <time title="\${g.at}">\${g.count > 1 ? rel(g.at) + " – " + rel(g.oldestAt) : rel(g.at)}</time>
+        <span class="st st-\${g.decision}">\${g.decision.replace("_", " ")}\${g.count > 1 ? " ×" + g.count : ""}</span>
+        <span class="rem">\${g.reason || ""}\${g.txHashes?.length ? ' · <a href="https://celoscan.io/tx/' + g.txHashes[0] + '" target="_blank" rel="noopener">TX↗</a>' : ""}</span>
         <span class="gate">AAVE</span>
       </div>\`).join("");
   }
